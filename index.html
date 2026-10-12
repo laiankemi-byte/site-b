@@ -107,6 +107,12 @@
       font-weight: 600;
       color: #667eea;
     }
+    .error {
+      color: #e53e3e;
+    }
+    .success {
+      color: #38a169;
+    }
   </style>
 </head>
 <body>
@@ -123,7 +129,7 @@
 
     <hr class="divider" />
 
-    <a href="index.html" class="nav-link">← 前往网站A - 录入信息</a>
+    <a href="https://laiankemi-byte.github.io/site-a/" class="nav-link">← 前往网站A - 录入信息</a>
   </div>
 
   <script type="module">
@@ -147,24 +153,55 @@
 
       resultEl.className = 'show';
       resultEl.textContent = '正在查询...';
+      console.log('开始查询账号:', username);
 
-      const { data, error } = await supabase
-        .from('user_infos')
-        .select('*')
-        .eq('username', username)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
+      try {
+        const { data, error } = await supabase
+          .from('user_infos')
+          .select('*')
+          .eq('username', username)
+          .limit(1)
+          .single();
 
-      if (error || !data) {
-        resultEl.className = 'show';
-        resultEl.textContent = '未找到该账号的信息，请先在网站A创建账号并录入。';
-      } else {
-        resultEl.className = 'show';
-        resultEl.innerHTML =
-          '<span class="info-label">账号名：</span>' + data.username + '<br/>' +
-          '<span class="info-label">录入信息：</span>' + data.info + '<br/>' +
-          '<span class="info-label">创建时间：</span>' + new Date(data.created_at).toLocaleString('zh-CN');
+        if (error) {
+          // 打印详细错误信息到控制台，方便排查
+          console.error('Supabase查询错误:', error);
+          console.error('错误代码:', error.code);
+          console.error('错误详情:', error.details);
+          console.error('HTTP状态:', error.hint);
+
+          // 根据错误类型给出不同的提示
+          if (error.code === 'PGRST116') {
+            // 没有找到数据
+            resultEl.textContent = '未找到该账号的信息，请先在网站A创建账号并录入。';
+          } else if (error.code === '42501' || (error.message && error.message.includes('row-level security'))) {
+            // RLS权限被拒绝
+            resultEl.className = 'show error';
+            resultEl.textContent = '【权限错误】查询被拒绝！请检查Supabase的RLS设置，需要为user_infos表添加允许anon角色读取的策略。';
+          } else if (error.code === '42P01') {
+            // 表不存在
+            resultEl.className = 'show error';
+            resultEl.textContent = '【表不存在】数据库中没有找到user_infos表！请先在Supabase中创建这张表。';
+          } else {
+            // 其他错误
+            resultEl.className = 'show error';
+            resultEl.textContent = '查询出错：' + error.message + '（错误代码：' + error.code + '）';
+          }
+        } else if (data) {
+          // 查询成功
+          resultEl.className = 'show success';
+          resultEl.innerHTML =
+            '<span class="info-label">账号名：</span>' + data.username + '<br/>' +
+            '<span class="info-label">录入信息：</span>' + data.info + '<br/>' +
+            '<span class="info-label">创建时间：</span>' + (data.created_at ? new Date(data.created_at).toLocaleString('zh-CN') : '未知');
+        } else {
+          resultEl.textContent = '未找到该账号的信息，请先在网站A创建账号并录入。';
+        }
+      } catch (err) {
+        // 捕获网络错误等异常
+        console.error('查询异常:', err);
+        resultEl.className = 'show error';
+        resultEl.textContent = '网络请求失败：' + err.message + '。请检查网络连接或Supabase服务状态。';
       }
     };
   </script>
